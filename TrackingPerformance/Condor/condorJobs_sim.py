@@ -3,6 +3,7 @@
 import os
 import argparse
 import subprocess
+import random;
 import time;
 ts = time.time()
 
@@ -94,7 +95,7 @@ for i, chunk in enumerate(task_chunks):
             output_file = "SIM_" + dect + "_" + part + "_" + theta + "_deg_" + momentum + "_GeV_" + Nevts_ + "_evts.slcio"
 
             # time.sleep(1)
-            seed = rng.integers(pow(2,63)) #str(time.time() % 1000)
+            seed = random.getrandbits(64) #str(time.time() % 1000)
             ddsim_args =""
             ddsim_args+=f" --compactFile ${{LCGEO}}/FCCee/compact/{dect}/{dect}.xml \ \n\t\t"
             ddsim_args+=f" --outputFile  {workingDir}/{output_file} \ \n\t\t"
