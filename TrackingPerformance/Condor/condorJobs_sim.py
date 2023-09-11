@@ -6,26 +6,51 @@ import subprocess
 import time;
 ts = time.time()
 
-thetaList_         = ["10", "20", "30", "40", "50", "60", "70", "80", "89"]
-momentumList_      = [ "1", "2", "5", "10", "20", "50", "100", "200"]
-particleList_      = [ "mu", "e", "pi"]
-#thetaList_         = ["10", "20"]
-#momentumList_      = [ "1"]#, "2"]
-#particleList_      = [ "mu"]
-DetectorModelList_ = [ "FCCee_o2_v02"]
+# thetaList_         = ["10", "20", "30", "40", "50", "60", "70", "80", "89"]
+# momentumList_      = [ "1", "2", "5", "10", "20", "50", "100", "200"]
+# particleList_      = [ "mu", "e", "pi"]
+thetaList_         = ["10"]
+momentumList_      = [ "1"]
+particleList_      = [ "mu"]
+DetectorModelList_ = [ "FCCee_o2_v02" ] #"FCCee_o2_v02"]CLD_o3_v01
 Nevts_             = "10"
-runningDirectory = "/afs/cern.ch/user/g/gasadows/FullSim/TrackingPerformance/Condor"
-SteeringFile = "/afs/cern.ch/user/g/gasadows/CLICPerformance/fcceeConfig/fcc_steer.py"
+
+# setup for Centos7, stable
 setup = "/cvmfs/sw.hsf.org/key4hep/setup.sh"
-EosDir = f"/eos/user/g/gasadows/Output/TrackingPerformance/LCIO/{DetectorModelList_[0]}/SIM/Test_splitting"
-run_sim_path = "/afs/cern.ch/user/g/gasadows/FullSim/TrackingPerformance/Condor/run_ddsim.py"
+
+# in case of Alma8/9, use nightlies instead
+try:
+    import distro
+    osname,version,kk = distro.linux_distribution()
+    version = float(version)
+    if 7 < version :
+        setup = '/cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh'
+except:
+    print("Asuming Centos 7, stable stack")
+    print(f"Setup: {setup}")
+
+# do not expose path to your home
+from pathlib import Path
+myhome = str(Path.home())
+SteeringFile = myhome + "/work/CLICPerformance/fcceeConfig/fcc_steer.py"
+run_sim_path = myhome + "/work/FullSimGaswk/TrackingPerformance/Condor/run_ddsim.py"
+
+# check if files exist
+if not Path(SteeringFile).is_file():
+    raise ModuleNotFoundError(SteeringFile)
+if not Path(run_sim_path).is_file():
+    raise ModuleNotFoundError(run_sim_path)
+
+# myhome[13:] removes the '/afs/cern.ch/' at the begining
+EosDir = f"/eos/{myhome[13:]}/Output/TrackingPerformance/LCIO/{DetectorModelList_[0]}/SIM/Test_splitting"
+workingDir='/tmp'
 
 # Create EosDir is it does not exist
 if not os.path.exists(EosDir):
     os.makedirs(EosDir)
 
 # Function to split the tasks into chunks of 200
-def chunk_tasks(tasks_list, chunk_size=200):
+def chunk_tasks(tasks_list, chunk_size=1):
     for i in range(0, len(tasks_list), chunk_size):
         yield tasks_list[i:i + chunk_size]
 
@@ -68,13 +93,30 @@ for i, chunk in enumerate(task_chunks):
 
             output_file = "SIM_" + dect + "_" + part + "_" + theta + "_deg_" + momentum + "_GeV_" + Nevts_ + "_evts.slcio"
 
-            time.sleep(1)
-            seed = str(time.time() % 1000)
-            arguments = "-DetectorModel " + dect + " -Nevts " + Nevts_ + " -Particle " + part + " -Momentum " + momentum + " -Theta " + theta + " -Seed " + seed + " -OutputPath " + output_file + " -SteeringFile " + SteeringFile
-            command = "python run_ddsim.py " + arguments
+            # time.sleep(1)
+            seed = rng.integers(pow(2,63)) #str(time.time() % 1000)
+            ddsim_args =""
+            ddsim_args+=f" --compactFile ${{LCGEO}}/FCCee/compact/{dect}/{dect}.xml \ \n\t\t"
+            ddsim_args+=f" --outputFile  {workingDir}/{output_file} \ \n\t\t"
+            ddsim_args+=f" --steeringFile  {SteeringFile} \ \n\t\t"
+            ddsim_args+=f" --random.seed  {seed} \ \n\t\t"
+            ddsim_args+=f" --numberOfEvents {Nevts_} \ \n\t\t"
+            ddsim_args+=f" --enableGun \ \n\t\t"
+            ddsim_args+=f" --gun.particle {part} \ \n\t\t"
+            ddsim_args+=f" --gun.energy {momentum}*GeV \ \n\t\t"
+            ddsim_args+=f" --gun.distribution uniform \ \n\t\t"
+            ddsim_args+=f" --gun.thetaMin {theta}*deg \ \n\t\t"
+            ddsim_args+=f" --gun.thetaMax {theta}*deg \ \n\t\t"
+            ddsim_args+=f" --crossingAngleBoost 0 \n"
+            command = "ddsim " + ddsim_args
 
-            file.write(command + "\n")
-            file.write("cp " + output_file + " " + EosDir + "\n")
+            # TEST
+            command = f"echo 'Hello world' >> {workingDir}/{output_file}"
+
+            file.write(command)
+            file.write( f"cp {workingDir}/{output_file} {EosDir}\n")
+            file.write( f"date > {EosDir}/{output_file}.kk\n")
+
 
     os.chmod(bash_file, 0o755)
 
@@ -84,6 +126,6 @@ for i, chunk in enumerate(task_chunks):
         file2.write(condor_file_template.format(len(chunk)))
 
     # Submit the Condor job for this chunk
-    os.system(f"cd {directory_jobs}; condor_submit condor_script.sub")
+    # os.system(f"cd {directory_jobs}; condor_submit condor_script.sub")
 
 
