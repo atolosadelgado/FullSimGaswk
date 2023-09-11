@@ -112,10 +112,10 @@ for i, chunk in enumerate(task_chunks):
             command = "ddsim " + ddsim_args
 
             # TEST
-            command = f"echo 'Hello world' >> {workingDir}/{output_file}"
+            command = f"echo 'Hello world' >> {workingDir}/{output_file}\n"
 
             file.write(command)
-            file.write( f"cp {workingDir}/{output_file} {EosDir}\n")
+            file.write( f"mv {workingDir}/{output_file} {EosDir}\n")
             file.write( f"date > {EosDir}/{output_file}.kk\n")
 
 
