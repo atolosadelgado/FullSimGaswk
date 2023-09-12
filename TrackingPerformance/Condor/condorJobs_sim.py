@@ -132,20 +132,20 @@ os.chmod(bash_file_name, 0o755)
 # if X=5, it means the executable bash_script.sh will be run 5 times
 # the variable $(ProcId) will change for each instance, from 0 to X-1
 # the variable $(ClusterId) is the same for all instances
-condor_file_template = '''
-executable = bash_script.sh
-arguments = $(ProcId)
-output = output.$(ClusterId).$(ProcId).out
-error = error.$(ClusterId).$(ProcId).err
-log = log.$(ClusterId).log
-queue {}
-'''
+njobs=len(DetectorModelList_) * len(particleList_) * len(thetaList_) * len(energyList_)
+condor_file_template = ""
+condor_file_template+=f"executable = {bash_file_name}\n"
+condor_file_template+=f"arguments = $(ProcId)\n"
+condor_file_template+=f"output = output.$(ClusterId).$(ProcId).out\n"
+condor_file_template+=f"error = error.$(ClusterId).$(ProcId).err\n"
+condor_file_template+=f"log = log.$(ClusterId).log\n"
+condor_file_template+=f"queue {njobs}\n"
+
 #+JobFlavour = "microcentury"   # 1 hour
 #+JobFlavour = "longlunch"     # 2 hours
 #+JobFlavour = "workday"        # 8 hours
 with open(condor_file_name, "w") as condor_file:
-    n=len(DetectorModelList_) * len(particleList_) * len(thetaList_) * len(energyList_)
-    condor_file.write(condor_file_template.format(n))
+    condor_file.write(condor_file_template)
 # os.system(f"cd {job_dir}; condor_submit condor_script.sub")
 
 
