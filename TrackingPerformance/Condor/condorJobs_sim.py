@@ -35,7 +35,7 @@ except:
 from pathlib import Path
 myhome = str(Path.home())
 SteeringFile = myhome + "/work/CLICPerformance/fcceeConfig/fcc_steer.py"
-myk4geo_path = myhome + "/work/CLD_with_ARC/k4geo/"
+myk4geo_path = myhome + "/work/CLD_with_ARC/k4geo"
 
 # check if files exist
 if not Path(SteeringFile).is_file():
@@ -83,7 +83,7 @@ with open(arg_file_name,"w") as arg_file:
         # time.sleep(1)
         seed = random.getrandbits(64)
         ddsim_args =""
-        ddsim_args+=f" --compactFile {myk4geo_path}/FCCee/compact/{detectorModel}/{detectorModel}.xml \t"
+        ddsim_args+=f" --compactFile {myk4geo_path}/FCCee/CLD/compact/{detectorModel}/{detectorModel}.xml \t"
         ddsim_args+=f" --outputFile  {workingDir}/{output_file} \t"
         ddsim_args+=f" --steeringFile  {SteeringFile} \t"
         ddsim_args+=f" --random.seed  {seed} \t"
