@@ -5,11 +5,11 @@ import random;
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Define variable list for the simulation
-thetaList_         = ["10", "20", "30", "40", "50", "60", "70", "80", "89"]
-energyList_      = [ "1", "2", "5", "10", "20", "50", "100", "200"]
-particleList_      = [ "mu", "e", "pi"]
-DetectorModelList_ = [ "FCCee_o2_v02" ] #"FCCee_o2_v02"]CLD_o3_v01
-Nevts_             = "10"
+thetaList_         = [ "45" ]#"10", "20", "30", "40", "50", "60", "70", "80", "89"]
+energyList_      = [ "1", "2"]#, "5", "10", "20", "50", "100", "200"]
+particleList_      = [ "mu-"] #, "e-", "pi-"]
+DetectorModelList_ = [ "CLD_o2_v05","CLD_o3_v01" ] #"FCCee_o2_v02"]CLD_o3_v01
+Nevts_             = "100"
 
 # Create all possible combinations
 import itertools
@@ -158,6 +158,7 @@ condor_file_template+=f"arguments = $(ProcId)\n"
 condor_file_template+=f"output = output.$(ClusterId).$(ProcId).out\n"
 condor_file_template+=f"error = error.$(ClusterId).$(ProcId).err\n"
 condor_file_template+=f"log = log.$(ClusterId).log\n"
+condor_file_template+='+JobFlavour = "tomorrow"\n'
 condor_file_template+=f"queue {njobs}\n"
 
 #+JobFlavour = "microcentury"   # 1 hour
