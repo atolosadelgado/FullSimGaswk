@@ -35,7 +35,6 @@ except:
 from pathlib import Path
 myhome = str(Path.home())
 SteeringFile = myhome + "/work/CLICPerformance/fcceeConfig/fcc_steer.py"
-myk4geo_path = myhome + "/work/CLD_with_ARC/k4geo"
 
 # check if files exist
 if not Path(SteeringFile).is_file():
@@ -53,7 +52,8 @@ if not os.path.exists(EosDir):
 
 # the job descriptor neither the executable must not be stored in EOS
 # https://batchdocs.web.cern.ch/troubleshooting/eos.html#no-eos-submission-allowed
-job_dir=f"./Condor_jobs"
+local_dir=str(Path.cwd())
+job_dir=f"{local_dir}/Condor_jobs"
 if not Path(job_dir).is_dir():
     os.system(f"mkdir -p {job_dir}")
 
@@ -65,6 +65,22 @@ if Path(arg_file_name).is_file():
     raise ModuleNotFoundError(f"Well, actually {arg_file_name} was found and it should not be there...")
 if Path(bash_file_name).is_file():
     raise ModuleNotFoundError(f"Well, actually {bash_file_name} was found and it should not be there...")
+
+# It seems the batch nodes can not see the local installation in my personal AFS
+# so the solution is to download, compile and install locally the repo for each job
+create_local_k4geo = '''
+cd /tmp
+mkdir CLD_with_ARC
+cd CLD_with_ARC
+git clone -b CLD_with_ARC https://github.com/atolosadelgado/k4geo.git
+cd k4geo/
+cmake -B build -S . -D CMAKE_INSTALL_PREFIX=install
+cmake --build build -j 6 -- install
+export LD_LIBRARY_PATH=$PWD/install/lib:$LD_LIBRARY_PATH
+cd
+
+'''
+myk4geo_path = "/tmp/CLD_with_ARC/k4geo"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # This file corresponds to a table, each row corresponds to all the arguments needed
@@ -104,21 +120,6 @@ with open(arg_file_name,"w") as arg_file:
 # and then it will read the correponding row from the argument table
 # execute the simulation using ddsim in workingDir(/tmp)
 # and move the final file to EOS directory
-
-# It seems the batch nodes can not see the local installation in my personal AFS
-# so the solution is to download, compile and install locally the repo for each job
-create_local_k4geo = '''
-cd /tmp
-mkdir CLD_with_ARC
-cd CLD_with_ARC
-git clone -b CLD_with_ARC https://github.com/atolosadelgado/k4geo.git
-cd k4geo/
-cmake -B build -S . -D CMAKE_INSTALL_PREFIX=install
-cmake --build build -j 6 -- install
-export LD_LIBRARY_PATH=$PWD/install/lib:$LD_LIBRARY_PATH
-cd
-
-'''
 
 with open(bash_file_name, "w") as sim_script:
         sim_script.write("#!/bin/bash \n")
