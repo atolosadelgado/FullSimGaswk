@@ -51,7 +51,9 @@ workingDir='/tmp'
 if not os.path.exists(EosDir):
     os.makedirs(EosDir)
 
-job_dir=f"{EosDir}/Condor_jobs"
+# the job descriptor neither the executable must not be stored in EOS
+# https://batchdocs.web.cern.ch/troubleshooting/eos.html#no-eos-submission-allowed
+job_dir=f"./Condor_jobs"
 if not Path(job_dir).is_dir():
     os.system(f"mkdir -p {job_dir}")
 
@@ -102,11 +104,27 @@ with open(arg_file_name,"w") as arg_file:
 # and then it will read the correponding row from the argument table
 # execute the simulation using ddsim in workingDir(/tmp)
 # and move the final file to EOS directory
+
+# It seems the batch nodes can not see the local installation in my personal AFS
+# so the solution is to download, compile and install locally the repo for each job
+create_local_k4geo = '''
+cd /tmp
+mkdir CLD_with_ARC
+cd CLD_with_ARC
+git clone -b CLD_with_ARC https://github.com/atolosadelgado/k4geo.git
+cd k4geo/
+cmake -B build -S . -D CMAKE_INSTALL_PREFIX=install
+cmake --build build -j 6 -- install
+export LD_LIBRARY_PATH=$PWD/install/lib:$LD_LIBRARY_PATH
+cd
+
+'''
+
 with open(bash_file_name, "w") as sim_script:
         sim_script.write("#!/bin/bash \n")
         sim_script.write("n=$1 \n")
         sim_script.write(f"source {setup}\n")
-        sim_script.write(f"export LD_LIBRARY_PATH={myk4geo_path}/install/lib:$LD_LIBRARY_PATH\n")
+        sim_script.write(create_local_k4geo)
         # Get line n+1, n will correspond to job number, which starts by zero
         sim_script.write(f"ArgList=( $(head -n $(($n+1)) {arg_file_name}|tail -1) )\n")
         # the first string corresponds to {workingDir}/{output_file}
