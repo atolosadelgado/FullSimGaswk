@@ -5,11 +5,14 @@ import random;
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Define variable list for the simulation
-thetaList_         = [ "45" ]#"10", "20", "30", "40", "50", "60", "70", "80", "89"]
-energyList_      = [ "1", "2"]#, "5", "10", "20", "50", "100", "200"]
+thetaList_         = [ ]
+thetaList_        += ["10", "20", "30", "40", "50", "60", "70", "80", "89"]
+thetaList_        += ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+energyList_      = [ "1"] #, "2"]#, "5", "10", "20", "50", "100", "200"]
 particleList_      = [ "mu-"] #, "e-", "pi-"]
 DetectorModelList_ = [ "CLD_o2_v05","CLD_o3_v01" ] #"FCCee_o2_v02"]CLD_o3_v01
-Nevts_             = "100"
+Nevts_             = "10000"
+simoutput_extension= "_edm4hep.root" # ".slcio", ".root"
 
 # Create all possible combinations
 import itertools
@@ -41,9 +44,9 @@ if not Path(SteeringFile).is_file():
     raise ModuleNotFoundError(SteeringFile)
 
 # myhome[13:] removes the '/afs/cern.ch/' at the begining of the AFS home path
-EosDir = f"/eos/{myhome[13:]}/Output/TrackingPerformance/LCIO/{DetectorModelList_[0]}/SIM/Test_splitting"
+EosDir = f"/eos/{myhome[13:]}/Condor_tests"
 
-# Work in /tmp, it is faster!
+# Work in /tmp, it is faster in local
 workingDir='/tmp'
 
 # Create EosDir is it does not exist
@@ -92,7 +95,8 @@ with open(arg_file_name,"w") as arg_file:
         output_file+= f"_{theta}_deg"
         output_file+= f"_{energy}_GeV"
         output_file+= f"_{Nevts_}"
-        output_file+= f"_evts.slcio"
+        output_file+= f"_evts"
+        output_file+=f"{simoutput_extension}"
 
         mv_output_file_args =""
         mv_output_file_args+=f"{workingDir}/{output_file}\t"
@@ -140,7 +144,7 @@ with open(bash_file_name, "w") as sim_script:
         sim_script.write(f"echo 'outputFinal: ' $outputFinal\n")
         sim_script.write(f"echo 'ddsimArgs: ' $ddsimArgs\n")
         sim_script.write(f"ddsim $ddsimArgs\n")
-        sim_script.write(f"mv $outputOriginal $outputFinal\n")
+        sim_script.write(f"xrdcp $outputOriginal $outputFinal\n")
         sim_script.write( f"date > $outputFinal.date\n")
 
 os.chmod(bash_file_name, 0o755)
