@@ -68,7 +68,7 @@ job_dir=f"{local_dir}/Condor_jobs"
 if Path(job_dir).is_dir():
     raise ModuleNotFoundError(f"Well, actually {job_dir} was found and it should not be there...")
 
-os.system(f"mkdir -p {job_dir}")
+os.system(f"mkdir {job_dir}")
 
 # Create the list of arguments, that will passed to a bash script
 # and finally the generic condor file that launch the jobs
@@ -78,7 +78,7 @@ condor_file_name=f"{job_dir}/condor_script.sub"
 
 k4geoDir = os.environ.get('K4GEO')
 create_local_k4geo = ''
-if not Path(job_dir).is_dir():
+if not Path(k4geoDir).is_dir():
     raise ModuleNotFoundError('k4geo path not found')
 
 # To compile k4geo, uncomment the following lines
