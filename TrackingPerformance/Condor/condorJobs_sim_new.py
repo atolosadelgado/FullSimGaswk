@@ -17,11 +17,11 @@ import random;
 
 #__________________________________________________________
 # Define variable list for the simulation
-thetaList_         = [ "45" ]#"10", "20", "30", "40", "50", "60", "70", "80", "89"]
+thetaList_         = [ "10", "20"]#, "30", "40", "50", "60", "70", "80", "89"]
 energyList_        = [ "1"]#, "2"]#, "5", "10", "20", "50", "100", "200"]
 particleList_      = [ "mu-"] #, "e-", "pi-"]
 DetectorModelList_ = [ "CLD_o2_v05"]#,"CLD_o3_v01" ] #"FCCee_o2_v02"]CLD_o3_v01
-Nevts_             = "10"
+Nevts_             = "100"
 
 # Create all possible combinations
 import itertools
@@ -112,7 +112,7 @@ for theta, energy, particle, detectorModel in list_of_combined_variables:
     output_file+= f"_{theta}_deg"
     output_file+= f"_{energy}_GeV"
     output_file+= f"_{Nevts_}_evts"
-    bash_file_name=f'{output_file}.sh'
+    bash_file_name=f'{job_dir}/{output_file}.sh'
     output_file+= f".root"
 
     outputFileIni=f"{workingDir}/{output_file}\t"
@@ -190,12 +190,13 @@ for theta, energy, particle, detectorModel in list_of_combined_variables:
 #   tomorrow     = 1 day
 #   testmatch    = 3 days
 #   nextweek     = 1 week
-jobflavour = 'espresso'
+jobflavour = 'microcentury'
 
 
 condor_file_name=f"{job_dir}/condor_script.sub"
 executable_regex='*.sh'
 condor_file_template=f'''
+executable     = $(filename)
 output = output.$(ClusterId).$(ProcId).out
 error = error.$(ClusterId).$(ProcId).err
 log = log.$(ClusterId).log
