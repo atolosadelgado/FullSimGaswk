@@ -15,13 +15,15 @@ Launch Jobs: cd Condor_jobs && condor_submit condor_script.sub
 import os
 import random;
 
+title_of_the_job="comparison_cld_o2_cld_o3"
+
 #__________________________________________________________
 # Define variable list for the simulation
-thetaList_         = [ "10", "20"]#, "30", "40", "50", "60", "70", "80", "89"]
-energyList_        = [ "1"]#, "2"]#, "5", "10", "20", "50", "100", "200"]
+thetaList_         = [ "10", "20", "30", "40", "50", "60", "70", "80", "89"]
+energyList_        = [ "50"]#, "2"]#, "5", "10", "20", "50", "100", "200"]
 particleList_      = [ "mu-"] #, "e-", "pi-"]
-DetectorModelList_ = [ "CLD_o2_v05"]#,"CLD_o3_v01" ] #"FCCee_o2_v02"]CLD_o3_v01
-Nevts_             = "100"
+DetectorModelList_ = [ "CLD_o2_v05","CLD_o3_v01" ] #"FCCee_o2_v02"]CLD_o3_v01
+Nevts_             = "1000"
 
 # Create all possible combinations
 import itertools
@@ -29,26 +31,27 @@ list_of_combined_variables = itertools.product(thetaList_, energyList_, particle
 
 #__________________________________________________________
 # source key4hep stable
-# setup = "/cvmfs/sw.hsf.org/key4hep/setup.sh"
+setup = "/cvmfs/sw.hsf.org/key4hep/setup.sh"
 # source key4hep nightlies
-setup = "/cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh"
+# setup = "/cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh"
 
 #__________________________________________________________
 # Create and check paths
 
-# # Steering file for DDSIM
+# Steering file for DDSIM
+# # The steering file will be copied for each job into the working directory
+# # where the executable (bash script) will be
 # do not expose path to your home
 from pathlib import Path
 myhome = str(Path.home())
-SteeringFilePath = myhome + "/Public/ddsim_steering_CLD.py"
-
 # Condor needs fullpath in order to copy the file
-# The file will be placed in the same dir as the bash executable
-# so we need also the base name
-SteeringFileName = os.path.basename(SteeringFilePath)
+SteeringFilePath = myhome + "/Public/ddsim_steering_CLD.py"
 # check if files exist
 if not Path(SteeringFilePath).is_file():
     raise ModuleNotFoundError(SteeringFilePath)
+
+# And we need the base name for ddsim
+SteeringFileName = os.path.basename(SteeringFilePath)
 
 # myhome[13:] removes the '/afs/cern.ch/' at the begining of the AFS home path
 # https://cern.service-now.com/service-portal?id=kb_article&sys_id=fae8543fc9ed05006d218776d679b74a
@@ -56,17 +59,13 @@ if not Path(SteeringFilePath).is_file():
 EosEntryPoint = 'root://eosuser.cern.ch'
 setupEosEnv=f'export EOS_MGM_URL={EosEntryPoint}'
 # EosEntryPoint will prefix EosDir during the copy of data
-EosDir = f"/eos/{myhome[13:]}/condor/"
+EosDir = f"/eos/{myhome[13:]}/condor/{title_of_the_job}/"
 AfsDir = myhome + '/Public'
 OutputDir = EosDir
 
 if OutputDir == EosDir:
     # https://cern.service-now.com/service-portal?id=kb_article&n=KB0003232
     os.system(f"eos {EosEntryPoint} mkdir {EosDir}")
-
-
-# work just in the temporal sandbox that is created
-workingDir='.'
 
 # the job descriptor neither the executable must not be stored in EOS
 # https://batchdocs.web.cern.ch/troubleshooting/eos.html#no-eos-submission-allowed
@@ -115,7 +114,7 @@ for theta, energy, particle, detectorModel in list_of_combined_variables:
     bash_file_name=f'{job_dir}/{output_file}.sh'
     output_file+= f".root"
 
-    outputFileIni=f"{workingDir}/{output_file}\t"
+    outputFileIni=f"{output_file}\t"
     outputFileFin=f"{OutputDir}/{output_file}\t"
 
     seed = 1 #random.getrandbits(64)
@@ -124,7 +123,7 @@ for theta, energy, particle, detectorModel in list_of_combined_variables:
     ddsim_args+=f" --outputFile  {outputFileIni} \t"
     # when transferring input file, the file will appear in the sandbox
     # here we use the local path (base name)
-    ddsim_args+=f" --steeringFile  {SteeringFileName} \t"
+    ddsim_args+=f" --steeringFile  {SteeringFilePath} \t"
     ddsim_args+=f" --random.seed  {seed} \t"
     ddsim_args+=f" --numberOfEvents {Nevts_} \t"
     ddsim_args+=f" --enableGun \t"
@@ -136,40 +135,40 @@ for theta, energy, particle, detectorModel in list_of_combined_variables:
     ddsim_args+=f" --random.enableEventSeed "
 
     # Create now the bash exec template for this particular job
-    bash_template = f'''
-    #!/bin/bash
-    source {setup}
-    {create_local_k4geo}
-    echo "ddsimArgs: " {ddsim_args}
-    echo "ddsim starts simulation..."
-    date
-    ddsim {ddsim_args}
-    date
-    echo "ddsim starts simulation... Done!"
-    # Setup EOS entry point
-    {setupEosEnv}
-    # lets try non verbose copy of the file...
-    xrdcp --nopbar {outputFileIni} {EosEntryPoint}/{outputFileFin}
-    # check if file exist
-    outputfile=$(eos {EosEntryPoint} ls {outputFileFin})
-    # if outputfile is empty, file was not copied
-    if [ -z "outputfile" ]
-    then
-      xrdcp -v  --debug 2 --retry 5 --cksum md5 --nopbar {outputFileIni} {EosEntryPoint}/{outputFileFin}
-    fi
-    outputfile=$(eos {EosEntryPoint} ls {outputFileFin})
-    # if file still missing, dump some info to be reported
-    # https://cern.service-now.com/service-portal?id=kb_article&n=KB0005830
-    if [ -z "outputfile" ]
-    then
-        echo ${{0##*/}} >> {AfsDir}/faulty_node.txt
-        ifconfig >> {AfsDir}/faulty_node.txt
-        cp ${{0##*/}}  {AfsDir}
-    fi
+    # beware the starting line, condor must guess that it is a bash script
+    bash_template = f'''#!/bin/bash
+source {setup}
+{create_local_k4geo}
+echo "ddsimArgs: " {ddsim_args}
+echo "ddsim starts simulation..."
+date
+ddsim {ddsim_args}
+date
+echo "ddsim starts simulation... Done!"
+# Setup EOS entry point
+{setupEosEnv}
+# lets try non verbose copy of the file...
+xrdcp --nopbar {outputFileIni} {EosEntryPoint}/{outputFileFin}
+# check if file exist
+outputfile=$(eos {EosEntryPoint} ls {outputFileFin})
+# if outputfile is empty, file was not copied
+if [ -z "outputfile" ]
+then
+    xrdcp -v  --debug 2 --retry 5 --cksum md5 --nopbar {outputFileIni} {EosEntryPoint}/{outputFileFin}
+fi
+outputfile=$(eos {EosEntryPoint} ls {outputFileFin})
+# if file still missing, dump some info to be reported
+# https://cern.service-now.com/service-portal?id=kb_article&n=KB0005830
+if [ -z "outputfile" ]
+then
+    echo ${{0##*/}} >> {AfsDir}/faulty_node.txt
+    ifconfig >> {AfsDir}/faulty_node.txt
+    cp ${{0##*/}}  {AfsDir}
+fi
     '''
 
     #__________________________________________________________
-    # This bash script takes ddsim arguments, create k4geo locally and then launch ddsim
+    # This bash script contains all instructions to run ddsim and copy the output file
     with open(bash_file_name, "w") as sim_script:
         sim_script.write(bash_template)
     os.chmod(bash_file_name, 0o755)
@@ -192,7 +191,8 @@ for theta, energy, particle, detectorModel in list_of_combined_variables:
 #   nextweek     = 1 week
 jobflavour = 'microcentury'
 
-
+# One can check if belongs to a group with the following command, in lxplus7:
+# haggis rights
 condor_file_name=f"{job_dir}/condor_script.sub"
 executable_regex='*.sh'
 condor_file_template=f'''
