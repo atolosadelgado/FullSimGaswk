@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
-This script generates 3 files:
+This script generates 2 types of files:
 1. condor job descriptor
-2. bash script
-3. text file with arguments
+2. bash script, one for each job
 
-The condor file will spawn as many instances as rows in the arguments text file.
-Each instance will execute the bash script, which basically wraps ddsim
-The generated files are automatically copied to EOS
+The condor file will spawn as many instances as bash files.
+Each instance will execute each bash script, which basically wraps ddsim
 
 Generate files: python3 condorJobs_sim_new.py
 Launch Jobs: cd Condor_jobs && condor_submit condor_script.sub
@@ -53,11 +51,21 @@ if not Path(SteeringFilePath).is_file():
     raise ModuleNotFoundError(SteeringFilePath)
 
 # myhome[13:] removes the '/afs/cern.ch/' at the begining of the AFS home path
-EosDir = f"/eos/{myhome[13:]}/condor/$(ClusterId)/$(ProcId)"
+# https://cern.service-now.com/service-portal?id=kb_article&sys_id=fae8543fc9ed05006d218776d679b74a
+# The XRootD/EOS entry point (instance server) for your files in CERNbox is root://eosuser.cern.ch
+EosEntryPoint = 'root://eosuser.cern.ch'
+setupEosEnv=f'export EOS_MGM_URL={EosEntryPoint}'
+# EosEntryPoint will prefix EosDir during the copy of data
+EosDir = f"/eos/{myhome[13:]}/condor/"
 AfsDir = myhome + '/Public'
 OutputDir = EosDir
 
-# Work in /tmp, it is faster in local
+if OutputDir == EosDir:
+    # https://cern.service-now.com/service-portal?id=kb_article&n=KB0003232
+    os.system(f"eos {EosEntryPoint} mkdir {EosDir}")
+
+
+# work just in the temporal sandbox that is created
 workingDir='.'
 
 # the job descriptor neither the executable must not be stored in EOS
@@ -71,14 +79,10 @@ if Path(job_dir).is_dir():
 
 os.system(f"mkdir {job_dir}")
 
-# Create the list of arguments, that will passed to a bash script
-# and finally the generic condor file that launch the jobs
-arg_file_name   =f"{job_dir}/arg_file.txt"
-bash_file_name  =f"{job_dir}/bash_script.sh"
-condor_file_name=f"{job_dir}/condor_script.sub"
+# Create one bash executable per job
 
 #__________________________________________________________
-k4geoDir = os.environ.get('K4GEO')
+k4geoDir = str(os.environ.get('K4GEO'))
 create_local_k4geo = ''
 if not Path(k4geoDir).is_dir():
     raise ModuleNotFoundError('k4geo path not found')
@@ -96,62 +100,79 @@ if not Path(k4geoDir).is_dir():
 # '''
 # k4geoDir = "./k4geo"
 
+
+
 #__________________________________________________________
 # This file corresponds to a table, each row corresponds to all the arguments needed
 # by the bash script that actually will execute each job
-with open(arg_file_name,"w") as arg_file:
-    for theta, energy, particle, detectorModel in list_of_combined_variables:
-        output_file = f"SIM_{detectorModel}"
-        output_file+= f"_{particle}"
-        output_file+= f"_{theta}_deg"
-        output_file+= f"_{energy}_GeV"
-        output_file+= f"_{Nevts_}"
-        output_file+= f"_evts.root"
+for theta, energy, particle, detectorModel in list_of_combined_variables:
 
-        mv_output_file_args =""
-        mv_output_file_args+=f"{workingDir}/{output_file}\t"
-        mv_output_file_args+=f"{OutputDir}/{output_file}\t"
+    output_file = f"SIM_{detectorModel}"
+    output_file+= f"_{particle}"
+    output_file+= f"_{theta}_deg"
+    output_file+= f"_{energy}_GeV"
+    output_file+= f"_{Nevts_}_evts"
+    bash_file_name=f'{output_file}.sh'
+    output_file+= f".root"
 
-        seed = 1 #random.getrandbits(64)
-        ddsim_args =""
-        ddsim_args+=f" --compactFile {k4geoDir}/FCCee/CLD/compact/{detectorModel}/{detectorModel}.xml \t"
-        ddsim_args+=f" --outputFile  {output_file} \t"
-        # when transferring input file, the file will appear in the sandbox
-        # here we use the local path (base name)
-        ddsim_args+=f" --steeringFile  {SteeringFileName} \t"
-        ddsim_args+=f" --random.seed  {seed} \t"
-        ddsim_args+=f" --numberOfEvents {Nevts_} \t"
-        ddsim_args+=f" --enableGun \t"
-        ddsim_args+=f" --gun.particle {particle} \t"
-        ddsim_args+=f" --gun.energy {energy}*GeV \t"
-        ddsim_args+=f" --gun.distribution uniform \t"
-        ddsim_args+=f" --gun.thetaMin {theta}*deg \t"
-        ddsim_args+=f" --gun.thetaMax {theta}*deg \t"
-        ddsim_args+=f" --random.enableEventSeed "
-        arg_file.write(f"{mv_output_file_args}{ddsim_args}\n")
+    outputFileIni=f"{workingDir}/{output_file}\t"
+    outputFileFin=f"{OutputDir}/{output_file}\t"
 
-#__________________________________________________________
-# This bash script takes ddsim arguments, create k4geo locally and then launch ddsim
-bash_template = f'''
-#!/bin/bash
-source {setup}
-{create_local_k4geo}
-ArgList=( "$@" )
-outputOriginal=${{ArgList[0]}}
-outputFinal=${{ArgList[1]}}
-ddsimArgs=${{ArgList[@]:2}}
-echo "ddsimArgs: " $ddsimArgs
-echo "ddsim starts simulation..."
-date
-ddsim $ddsimArgs
-xrdcp $outputOriginal $outputFinal
-echo "ddsim starts simulation... Done!"
-date
-date > $outputFinal.date
-'''
-with open(bash_file_name, "w") as sim_script:
-    sim_script.write(bash_template)
-os.chmod(bash_file_name, 0o755)
+    seed = 1 #random.getrandbits(64)
+    ddsim_args =""
+    ddsim_args+=f" --compactFile {k4geoDir}/FCCee/CLD/compact/{detectorModel}/{detectorModel}.xml \t"
+    ddsim_args+=f" --outputFile  {outputFileIni} \t"
+    # when transferring input file, the file will appear in the sandbox
+    # here we use the local path (base name)
+    ddsim_args+=f" --steeringFile  {SteeringFileName} \t"
+    ddsim_args+=f" --random.seed  {seed} \t"
+    ddsim_args+=f" --numberOfEvents {Nevts_} \t"
+    ddsim_args+=f" --enableGun \t"
+    ddsim_args+=f" --gun.particle {particle} \t"
+    ddsim_args+=f" --gun.energy {energy}*GeV \t"
+    ddsim_args+=f" --gun.distribution uniform \t"
+    ddsim_args+=f" --gun.thetaMin {theta}*deg \t"
+    ddsim_args+=f" --gun.thetaMax {theta}*deg \t"
+    ddsim_args+=f" --random.enableEventSeed "
+
+    # Create now the bash exec template for this particular job
+    bash_template = f'''
+    #!/bin/bash
+    source {setup}
+    {create_local_k4geo}
+    echo "ddsimArgs: " {ddsim_args}
+    echo "ddsim starts simulation..."
+    date
+    ddsim {ddsim_args}
+    date
+    echo "ddsim starts simulation... Done!"
+    # Setup EOS entry point
+    {setupEosEnv}
+    # lets try non verbose copy of the file...
+    xrdcp --nopbar {outputFileIni} {EosEntryPoint}/{outputFileFin}
+    # check if file exist
+    outputfile=$(eos {EosEntryPoint} ls {outputFileFin})
+    # if outputfile is empty, file was not copied
+    if [ -z "outputfile" ]
+    then
+      xrdcp -v  --debug 2 --retry 5 --cksum md5 --nopbar {outputFileIni} {EosEntryPoint}/{outputFileFin}
+    fi
+    outputfile=$(eos {EosEntryPoint} ls {outputFileFin})
+    # if file still missing, dump some info to be reported
+    # https://cern.service-now.com/service-portal?id=kb_article&n=KB0005830
+    if [ -z "outputfile" ]
+    then
+        echo ${{0##*/}} >> {AfsDir}/faulty_node.txt
+        ifconfig >> {AfsDir}/faulty_node.txt
+        cp ${{0##*/}}  {AfsDir}
+    fi
+    '''
+
+    #__________________________________________________________
+    # This bash script takes ddsim arguments, create k4geo locally and then launch ddsim
+    with open(bash_file_name, "w") as sim_script:
+        sim_script.write(bash_template)
+    os.chmod(bash_file_name, 0o755)
 
 #__________________________________________________________
 # Now lets create the condor job descriptor
@@ -160,6 +181,7 @@ os.chmod(bash_file_name, 0o755)
 # These options were removed after inestabilities of EOS were detected
 # output_destination = root://eosuser.cern.ch/{EosDir}
 # MY.XRDCP_CREATE_DIR = True
+
 # Job flavours at CERN:
 #   espresso     = 20 minutes
 #   microcentury = 1 hour
@@ -168,19 +190,21 @@ os.chmod(bash_file_name, 0o755)
 #   tomorrow     = 1 day
 #   testmatch    = 3 days
 #   nextweek     = 1 week
+jobflavour = 'espresso'
 
 
+condor_file_name=f"{job_dir}/condor_script.sub"
+executable_regex='*.sh'
 condor_file_template=f'''
-executable = {bash_file_name}
 output = output.$(ClusterId).$(ProcId).out
 error = error.$(ClusterId).$(ProcId).err
 log = log.$(ClusterId).log
 should_transfer_files = YES
 transfer_input_files = {SteeringFilePath}
 transfer_output_files = ""
-+JobFlavour = "espresso"
++JobFlavour = "{jobflavour}"
 +AccountingGroup = "group_u_FCC.local_gen"
-queue arguments from {arg_file_name}
+queue filename matching files {executable_regex}
 '''
 with open(condor_file_name, "w") as condor_file:
     condor_file.write(condor_file_template)
